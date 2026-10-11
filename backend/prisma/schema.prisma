@@ -1,0 +1,242 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model Category {
+  id          String     @id @default(uuid())
+  name        String     @unique
+  description String?
+  isActive    Boolean    @default(true)
+  createdAt   DateTime   @default(now())
+  updatedAt   DateTime   @updatedAt
+  medicines   Medicine[]
+
+  @@index([isActive])
+}
+
+model Unit {
+  id          String     @id @default(uuid())
+  name        String     @unique
+  description String?
+  isActive    Boolean    @default(true)
+  createdAt   DateTime   @default(now())
+  updatedAt   DateTime   @updatedAt
+  medicines   Medicine[]
+
+  @@index([isActive])
+  @@index([name])
+}
+model Medicine {
+  id                    String                 @id @default(uuid())
+  name                  String
+  genericName           String?
+  brandName             String?
+  sku                   String?                @unique
+  unitId                String
+  description           String?
+  minimumStock          Int                    @default(0)
+  isActive              Boolean                @default(true)
+  categoryId             String
+  createdAt             DateTime               @default(now())
+  updatedAt             DateTime               @updatedAt
+  batches               Batch[]
+  inventoryTransactions InventoryTransaction[]
+  category              Category               @relation(fields: [categoryId], references: [id])
+  unitRelation          Unit                   @relation(fields: [unitId], references: [id])
+  saleItems             SaleItem[]
+
+  @@index([name])
+  @@index([genericName])
+  @@index([categoryId])
+  @@index([unitId])
+  @@index([isActive])
+}
+model Supplier {
+  id            String         @id @default(uuid())
+  name          String
+  phone         String?
+  email         String?
+  address       String?
+  gstNumber     String?
+  isActive      Boolean        @default(true)
+  createdAt     DateTime       @default(now())
+  updatedAt     DateTime       @updatedAt
+  stockReceipts StockReceipt[]
+
+  @@index([name])
+  @@index([isActive])
+}
+
+model Batch {
+  id                    String                 @id @default(uuid())
+  medicineId            String
+  batchNumber           String
+  normalizedBatchNumber String
+  purchasePrice         Decimal                @db.Decimal(12, 2)
+  sellingPrice          Decimal                @db.Decimal(12, 2)
+  quantity              Int                    @default(0)
+  manufacturingDate     DateTime?
+  expiryDate            DateTime
+  isActive              Boolean                @default(true)
+  createdAt             DateTime               @default(now())
+  updatedAt             DateTime               @updatedAt
+  medicine              Medicine               @relation(fields: [medicineId], references: [id])
+  inventoryTransactions InventoryTransaction[]
+  saleItems             SaleItem[]
+  stockReceipts         StockReceipt[]
+
+  @@unique([medicineId, normalizedBatchNumber])
+  @@index([medicineId])
+  @@index([normalizedBatchNumber])
+  @@index([expiryDate])
+  @@index([isActive])
+}
+
+model StockReceipt {
+  id            String   @id @default(uuid())
+  batchId       String
+  supplierId    String
+  quantity      Int
+  purchasePrice Decimal  @db.Decimal(12, 2)
+  sellingPrice  Decimal  @db.Decimal(12, 2)
+  reference     String?
+  receivedAt    DateTime @default(now())
+  notes         String?
+  createdAt     DateTime @default(now())
+  batch         Batch    @relation(fields: [batchId], references: [id])
+  supplier      Supplier @relation(fields: [supplierId], references: [id])
+
+  @@index([batchId])
+  @@index([supplierId])
+  @@index([receivedAt])
+}
+
+model InventoryOperation {
+  id          String          @id @default(uuid())
+  operationId String          @unique
+  type        OperationType
+  status      OperationStatus @default(PENDING)
+  createdAt   DateTime        @default(now())
+  completedAt DateTime?
+
+  @@index([type])
+  @@index([status])
+  @@index([createdAt])
+}
+
+model InventoryTransaction {
+  id               String                   @id @default(uuid())
+  medicineId       String
+  batchId          String
+  type             InventoryTransactionType
+  quantity         Int
+  previousQuantity Int
+  newQuantity      Int
+  adjustmentType   AdjustmentType?
+  adjustmentReason AdjustmentReason?
+  reference        String?
+  notes            String?
+  createdAt        DateTime                 @default(now())
+  batch            Batch                    @relation(fields: [batchId], references: [id])
+  medicine         Medicine                 @relation(fields: [medicineId], references: [id])
+
+  @@index([medicineId])
+  @@index([batchId])
+  @@index([createdAt])
+  @@index([type])
+}
+
+model Settings {
+  id                 String   @id @default(uuid())
+  storeName          String   @default("Medical Store")
+  storeAddress       String?
+  storePhone         String?
+  currency           String   @default("INR")
+  expiryWarningDays  Int      @default(90)
+  expiryCriticalDays Int      @default(30)
+  timezone           String   @default("Asia/Kolkata")
+  createdAt          DateTime @default(now())
+  updatedAt          DateTime @updatedAt
+}
+
+model Sale {
+  id            String        @id @default(uuid())
+  receiptNumber String        @unique
+  saleDate      DateTime      @default(now())
+  subtotal      Decimal       @db.Decimal(12, 2)
+  discount      Decimal       @default(0) @db.Decimal(12, 2)
+  totalAmount   Decimal       @db.Decimal(12, 2)
+  paymentMethod PaymentMethod
+  customerName  String?
+  customerPhone String?
+  notes         String?
+  operationId   String        @unique
+  createdAt     DateTime      @default(now())
+  items         SaleItem[]
+
+  @@index([saleDate])
+  @@index([paymentMethod])
+  @@index([customerName])
+}
+
+model SaleItem {
+  id         String   @id @default(uuid())
+  saleId     String
+  medicineId String
+  batchId    String
+  quantity   Int
+  unitPrice  Decimal  @db.Decimal(12, 2)
+  totalPrice Decimal  @db.Decimal(12, 2)
+  batch      Batch    @relation(fields: [batchId], references: [id])
+  medicine   Medicine @relation(fields: [medicineId], references: [id])
+  sale       Sale     @relation(fields: [saleId], references: [id])
+
+  @@index([saleId])
+  @@index([medicineId])
+  @@index([batchId])
+}
+
+enum InventoryTransactionType {
+  STOCK_IN
+  STOCK_OUT
+  ADJUSTMENT
+}
+
+enum AdjustmentType {
+  INCREASE
+  DECREASE
+}
+
+enum AdjustmentReason {
+  PHYSICAL_COUNT
+  DAMAGED
+  EXPIRED
+  LOST
+  CORRECTION
+  OTHER
+}
+
+enum PaymentMethod {
+  CASH
+  UPI
+  CARD
+  OTHER
+}
+
+enum OperationType {
+  STOCK_IN
+  STOCK_OUT
+  ADJUSTMENT
+  SALE
+}
+
+enum OperationStatus {
+  PENDING
+  COMPLETED
+  FAILED
+}
